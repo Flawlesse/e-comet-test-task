@@ -1,0 +1,6 @@
+[
+{"city_name": "Minsk", "city_code": "BY", "temperature": "-4", "windspeed": "0.8", "pressure": "1016"},
+{"city_name": "Moscow", "city_code": "RU", "temperature": "-1", "windspeed": "1.1", "pressure": "1012"},
+{"city_name": "Ottawa", "city_code": "CA", "temperature": "-25", "windspeed": "8.2", "pressure": "1029"},
+{"city_name": "Athens", "city_code": "GR", "temperature": "6", "windspeed": "0.9", "pressure": "1019"}
+]
