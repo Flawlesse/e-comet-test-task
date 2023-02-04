@@ -1,0 +1,1 @@
+* * * * * export SCRAPY=/usr/local/bin/scrapy && /app/runjob.sh >> /var/log/cron.log 2>&1

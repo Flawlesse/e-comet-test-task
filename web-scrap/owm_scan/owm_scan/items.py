@@ -7,8 +7,9 @@ import scrapy
 
 
 class OwmScanItem(scrapy.Item):
+    city_id = scrapy.Field()
     city_name = scrapy.Field()
     city_code = scrapy.Field()
     temperature = scrapy.Field()
-    pressure = scrapy.Field()
     windspeed = scrapy.Field()
+    pressure = scrapy.Field()
