@@ -1,14 +1,16 @@
 version: "3"
 services:
   db:
-    image: postgres:14.1
+    build:
+      dockerfile: database/Dockerfile
+      context: .
     container_name: db
+    env_file:
+      - .env
     networks:
       - my_network
     ports:
       - 8001:5432
-    env_file:
-      - .env
     volumes:
       - pgdata:/var/lib/postgresql/data
 

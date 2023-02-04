@@ -1,14 +1,12 @@
 import scrapy
 from owm_scan.items import OwmScanItem
-# from scrapy.utils.response import open_in_browser
 from scrapy_playwright.page import PageMethod
-# from scrapy_selenium import SeleniumRequest
-# from selenium.webdriver.common.by import By
-# from selenium.webdriver.support import expected_conditions as EC
 import re
 from decouple import Config, RepositoryEnv
-env_config = Config(RepositoryEnv("/.env"))
 import psycopg2
+
+
+env_config = Config(RepositoryEnv("/.env"))
 
 
 class OwmCityScanSpider(scrapy.Spider):
@@ -26,28 +24,25 @@ class OwmCityScanSpider(scrapy.Spider):
             port=env_config.get("PORT")
         )
         cursor = connection.cursor()
-        # Get cities' id list
+        # Get cities' id list from db
         sql = "SELECT id FROM city"
         cursor.execute(sql)
         cities_id_list = [el[0] for el in cursor.fetchall()]
         cursor.close()
         connection.close()
-        
-        # [625144, 524901, 6094817, 264371]
+        # open up page for each of picked city ids
+        # and wait for main ul to render via JS.
+        # .icon-pressure load pretty much means that
+        # all the list items we need are loaded since
+        # it goes as one of the latest in ul.weather-items
         for i in cities_id_list:
-            # yield SeleniumRequest(
-            #     url=self.url.format(i), 
-            #     callback=self.parse, 
-            #     wait_time=20, 
-            #     wait_until=EC.element_to_be_clickable((By.CLASS_NAME,'current-temp'))
-            # )
             yield scrapy.Request(
                 self.url.format(i), 
                 meta=dict(
                     playwright = True,
                     playwright_include_page = True,
                     playwright_page_methods = [
-                        PageMethod('wait_for_selector', '.current-temp')
+                        PageMethod('wait_for_selector', '.icon-pressure')
                     ],
                     errback = self.err_callback,
                 ),
@@ -65,7 +60,18 @@ class OwmCityScanSpider(scrapy.Spider):
         item['temperature'] = response.css('.current-temp span.heading').css('::text').get()[:-2]
         windspeed_content = response.css('.wind-line::text').get()
         item['windspeed'] = re.findall(r"\d+\.?\d*", windspeed_content)[0]
-        item['pressure'] = response.css('ul.weather-items>li:nth-child(2)::text').get()[:-3]
+        # ul.weather-items contains li tags that have no class in them, but
+        # we know for sure that the text content ends with 'hPa', so we loop
+        # through each li tag's text contents & look for what we need.
+        # The reason why we're doing this is simply because in some cases li
+        # tags are reordered in ul.weather-items in weird ways sometimes.
+        # For example, I encountered the first li tag to display 
+        # snow precipitation level.
+        p_li_text_list = response.css('ul.weather-items li').css("::text").extract()
+        for elem_text in p_li_text_list:
+            if elem_text is not None and elem_text.lower().strip().endswith("hpa"):
+                item['pressure'] = elem_text[:-3]
+                break
         yield item
 
     async def err_callback(self, failure):
