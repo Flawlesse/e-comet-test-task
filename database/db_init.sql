@@ -25,3 +25,14 @@ INSERT INTO city (id, name, code) VALUES (625144, 'Minsk', 'BY');
 INSERT INTO city (id, name, code) VALUES (524901, 'Moscow', 'RU');
 INSERT INTO city (id, name, code) VALUES (6094817, 'Ottawa', 'CA');
 INSERT INTO city (id, name, code) VALUES (264371, 'Athens', 'GR');
+
+
+-- COMMENT THIS OUT!
+-- SELECT found_max_measurements.city_name, city_measurement.temperature FROM (
+--     SELECT city.name as city_name, MAX(city_measurement.id) as measure_id
+--     FROM city 
+--     JOIN city_measurement ON city.id=city_measurement.city_id 
+--     -- WHERE city.name ILIKE 'M%'
+--     GROUP BY city.name
+-- ) AS found_max_measurements
+-- JOIN city_measurement ON found_max_measurements.measure_id = city_measurement.id;
