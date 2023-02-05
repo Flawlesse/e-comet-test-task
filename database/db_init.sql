@@ -25,3 +25,4 @@ INSERT INTO city (id, name, code) VALUES (625144, 'Minsk', 'BY');
 INSERT INTO city (id, name, code) VALUES (524901, 'Moscow', 'RU');
 INSERT INTO city (id, name, code) VALUES (6094817, 'Ottawa', 'CA');
 INSERT INTO city (id, name, code) VALUES (264371, 'Athens', 'GR');
+
