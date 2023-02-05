@@ -4,6 +4,7 @@ import psycopg2
 from typing import Optional
 import requests
 from api.config import ENV
+from api.validators import get_validated_timestamp_bounds
 
 
 app = FastAPI()
@@ -96,5 +97,110 @@ async def cities_last_weather(response: Response, search: Optional[str] = None):
 
 
 @app.get('/city_stats')
-async def city_stats(city: str, start_dt: int, end_dt: int, response: Response):
-    pass
+async def city_stats(city: str, response: Response, start_dt: Optional[int] = None, end_dt: Optional[int] = None):
+    """
+    Please notice that start_dt & end_dt are provided as UTC timestamps, 
+    which are raw integers. Time is in SECONDS since Epoch.
+    Also, min value for start_dt & end_dt is 2023-01-01 00:00:00
+    or 1669766400. Visit https://www.epochconverter.com/ for more help.
+    """
+    # normalize input
+    start_dt, end_dt = get_validated_timestamp_bounds(start_dt=start_dt, end_dt=end_dt)
+    city = city.strip()
+
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # check if city is already present in db
+            # and get city.id back for faster search
+            sql = """
+                SELECT id, name, code FROM city WHERE name ILIKE %s
+            """
+            params = (city,)
+            cursor.execute(sql, params)
+            res = cursor.fetchone()
+            if res is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail=f"No city \"{city}\" was found. Please provide full name of the city."
+                )
+            city_id = res[0]
+            city_name = res[1]
+            city_code = res[2]
+
+            # collect measurements from start_dt to end_dt
+            sql = f"""
+                SELECT id, temperature, windspeed, pressure, measured_when
+                FROM city_measurement
+                WHERE city_id = %s
+                {"AND measured_when >= %s" if start_dt is not None else ""}
+                {"AND measured_when <= %s" if end_dt is not None else ""}
+                ORDER BY measured_when DESC;
+            """
+            params = [city_id]
+            if start_dt is not None:
+                params.append(start_dt)
+            if end_dt is not None:
+                params.append(end_dt)
+            cursor.execute(sql, params)
+            measurements = [
+                {
+                    'id': entry[0], 
+                    'tepmerature': entry[1],
+                    'windspeed': entry[2],
+                    'pressure': entry[3],
+                    'measured_when': entry[4],
+                }
+                for entry in cursor.fetchall()
+            ]
+
+            # form SQL-query & collect statistics
+            if len(measurements) != 0:
+                sql = f"""
+                    SELECT AVG(temperature) as avg_temp, 
+                        AVG(windspeed) as avg_wind, 
+                        AVG(pressure) as avg_pres
+                    FROM city_measurement 
+                    WHERE city_id = %s
+                    {"AND measured_when >= %s" if start_dt is not None else ""}
+                    {"AND measured_when <= %s" if end_dt is not None else ""}
+                """
+                params = [city_id]
+                if start_dt is not None:
+                    params.append(start_dt)
+                if end_dt is not None:
+                    params.append(end_dt)
+                cursor.execute(sql, params)
+                res = cursor.fetchone()
+                avg_stats = {
+                    'avg_temperature': round(res[0], 2), 
+                    'avg_windspeed': round(res[1], 2),
+                    'avg_pressure': round(res[2], 2)
+                }
+            else:
+                avg_stats = {
+                    'avg_temperature': None, 
+                    'avg_windspeed': None,
+                    'avg_pressure': None
+                }
+
+            # now form a proper response
+            response_body = {
+                'id': city_id,
+                'name': city_name,
+                'code': city_code,
+                'stats': avg_stats,
+                'count': len(measurements),
+                'measurements': measurements,
+            }
+            response.status_code = status.HTTP_200_OK
+            return response_body
+    except HTTPException as exc:
+        raise exc
+    except (Exception, psycopg2.Error):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Bad request."
+        )
+    finally:
+        connection.close()
